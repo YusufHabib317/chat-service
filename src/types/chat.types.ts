@@ -1,3 +1,5 @@
+import { Server, Socket } from 'socket.io';
+
 // Merchant-Customer Chat Types
 
 export interface ChatSession {
@@ -6,6 +8,7 @@ export interface ChatSession {
   customerId?: string;
   customerName: string;
   customerEmail?: string;
+  customerToken?: string;
   status: 'active' | 'closed';
   aiEnabled: boolean;
   merchantTookOver: boolean;
@@ -49,7 +52,7 @@ export interface ServerToClientEvents {
   'typing:stop': (data: { senderType: 'customer' | 'merchant' }) => void;
   'session:created': (session: ChatSession) => void;
   'session:history': (messages: ChatMessage[]) => void;
-  'error': (error: { message: string }) => void;
+  error: (error: { message: string }) => void;
 }
 
 export interface ClientToServerEvents {
@@ -58,8 +61,9 @@ export interface ClientToServerEvents {
     customerName: string;
     customerEmail?: string;
     customerId?: string;
+    customerToken?: string;
   }) => void;
-  'merchant:join': (data: { merchantId: string }) => void;
+  'merchant:join': () => void;
   'message:send': (data: {
     sessionId: string;
     content: string;
@@ -81,3 +85,17 @@ export interface SocketData {
   merchantId?: string;
   sessionId?: string;
 }
+
+export type TypedServer = Server<
+  ClientToServerEvents,
+  ServerToClientEvents,
+  InterServerEvents,
+  SocketData
+>;
+
+export type TypedSocket = Socket<
+  ClientToServerEvents,
+  ServerToClientEvents,
+  InterServerEvents,
+  SocketData
+>;

@@ -3,7 +3,7 @@ import { ServerToClientEvents, ClientToServerEvents, SocketData } from '../../ty
 
 type TypedSocket = Socket<ClientToServerEvents, ServerToClientEvents, {}, SocketData>;
 
-export function handleTyping(socket: TypedSocket, io: any) {
+export function handleTyping(socket: TypedSocket) {
   socket.on('typing:start', ({ sessionId }) => {
     const senderType = socket.data.userType;
     if (!senderType) return;

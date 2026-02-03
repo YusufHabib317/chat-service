@@ -137,6 +137,7 @@ model ChatSession {
   customerId    String?
   customerName  String
   customerEmail String?
+  customerToken String? @default(uuid()) // Secure token for customer session resumption
 
   status           String  @default("active") // active, closed
   aiEnabled        Boolean @default(true)

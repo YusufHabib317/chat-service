@@ -1,28 +1,25 @@
-import { Socket } from 'socket.io';
 import { chatService } from '../../services/chat.service';
-import { ServerToClientEvents, ClientToServerEvents, SocketData } from '../../types/chat.types';
+import { TypedSocket, TypedServer } from '../../types/chat.types';
 
-type TypedSocket = Socket<ClientToServerEvents, ServerToClientEvents, {}, SocketData>;
-
-export function handleMerchantJoin(socket: TypedSocket, io: any) {
-  socket.on('merchant:join', async ({ merchantId }) => {
+export function handleMerchantJoin(socket: TypedSocket, io: TypedServer) {
+  socket.on('merchant:join', async () => {
     try {
-      // Store merchant data in socket
-      socket.data.userType = 'merchant';
-      socket.data.merchantId = merchantId;
+      // Strict Auth Check
+      if (socket.data.userType !== 'merchant' || !socket.data.merchantId) {
+        socket.emit('error', { message: 'Unauthorized: Invalid merchant credentials' });
+        return;
+      }
 
-      // Join merchant room to receive all session notifications
+      const { merchantId } = socket.data;
+
       socket.join(`merchant:${merchantId}`);
 
-      // Get all active sessions for this merchant
       const sessions = await chatService.getMerchantSessions(merchantId);
 
-      // Join all active session rooms
       for (const session of sessions) {
         socket.join(`session:${session.id}`);
       }
 
-      // Notify customers that merchant is online
       io.to(`merchant:${merchantId}`).emit('merchant:online', { merchantId });
 
       console.log(`Merchant ${merchantId} joined with ${sessions.length} active sessions`);
@@ -33,25 +30,23 @@ export function handleMerchantJoin(socket: TypedSocket, io: any) {
   });
 }
 
-export function handleMerchantMessage(socket: TypedSocket, io: any) {
+export function handleMerchantMessage(socket: TypedSocket, io: TypedServer) {
   socket.on('message:send', async ({ sessionId, content, senderType }) => {
     if (senderType !== 'merchant') return;
 
     try {
       const session = await chatService.getSession(sessionId);
-      
+
       if (!session) {
         socket.emit('error', { message: 'Session not found' });
         return;
       }
 
-      // Verify merchant owns this session
       if (session.merchantId !== socket.data.merchantId) {
         socket.emit('error', { message: 'Unauthorized' });
         return;
       }
 
-      // Save merchant message
       const message = await chatService.saveMessage(
         sessionId,
         content,
@@ -59,7 +54,6 @@ export function handleMerchantMessage(socket: TypedSocket, io: any) {
         socket.data.merchantId
       );
 
-      // Broadcast to session room
       io.to(`session:${sessionId}`).emit('message:receive', message);
 
       // Automatically take over if not already
@@ -74,11 +68,11 @@ export function handleMerchantMessage(socket: TypedSocket, io: any) {
   });
 }
 
-export function handleMerchantTakeover(socket: TypedSocket, io: any) {
+export function handleMerchantTakeover(socket: TypedSocket, io: TypedServer) {
   socket.on('merchant:takeover', async ({ sessionId }) => {
     try {
       const session = await chatService.getSession(sessionId);
-      
+
       if (!session) {
         socket.emit('error', { message: 'Session not found' });
         return;
@@ -104,11 +98,11 @@ export function handleMerchantTakeover(socket: TypedSocket, io: any) {
   });
 }
 
-export function handleMerchantReleaseTakeover(socket: TypedSocket, io: any) {
+export function handleMerchantReleaseTakeover(socket: TypedSocket, io: TypedServer) {
   socket.on('merchant:release_takeover', async ({ sessionId }) => {
     try {
       const session = await chatService.getSession(sessionId);
-      
+
       if (!session) {
         socket.emit('error', { message: 'Session not found' });
         return;

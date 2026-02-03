@@ -2,7 +2,7 @@ import axios from 'axios';
 import { contextService } from './context.service';
 import { ChatMessage } from '../types/chat.types';
 
-const AI_API_KEY = process.env.AI_API_KEY;
+const { AI_API_KEY } = process.env;
 const AI_MODEL = process.env.AI_MODEL || 'gpt-4';
 const AI_ENABLED = process.env.AI_ENABLED === 'true';
 
@@ -18,7 +18,7 @@ export class AIService {
     try {
       // Get merchant context
       const context = await contextService.getMerchantContext(merchantId);
-      
+
       if (!context) {
         return "I'm sorry, I'm having trouble accessing the product information right now.";
       }
@@ -29,10 +29,10 @@ export class AIService {
       // Format conversation history
       const messages = [
         { role: 'system', content: systemPrompt },
-        ...conversationHistory.slice(-10).map(msg => ({
+        ...conversationHistory.slice(-10).map((msg) => ({
           role: msg.senderType === 'customer' ? 'user' : 'assistant',
-          content: msg.content
-        }))
+          content: msg.content,
+        })),
       ];
 
       // Call OpenRouter API
@@ -42,15 +42,15 @@ export class AIService {
           model: AI_MODEL,
           messages,
           temperature: 0.7,
-          max_tokens: 500
+          max_tokens: 500,
         },
         {
           headers: {
-            'Authorization': `Bearer ${AI_API_KEY}`,
+            Authorization: `Bearer ${AI_API_KEY}`,
             'Content-Type': 'application/json',
             'HTTP-Referer': process.env.CORS_ORIGIN || 'http://localhost:3000',
-            'X-Title': 'MerchantHub Chat'
-          }
+            'X-Title': 'MerchantHub Chat',
+          },
         }
       );
 
