@@ -18,6 +18,7 @@ dotenv.config();
 const app = express();
 
 interface AuthenticatedRequest extends Request {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   user?: any;
 }
 
@@ -28,22 +29,43 @@ const requireAuth = async (req: Request, res: Response, next: NextFunction) => {
   if (!token && req.headers.cookie) {
     const cookies = req.headers.cookie.split(';').reduce(
       (acc, cookie) => {
-        const [key, value] = cookie.trim().split('=');
-        acc[key] = value;
+        const parts = cookie.trim().split('=');
+        const key = parts[0];
+        const value = parts.slice(1).join('=');
+        // URL decode the value
+        acc[key] = decodeURIComponent(value);
         return acc;
       },
       {} as Record<string, string>
     );
+
+    // Debug: Log all cookie keys
+    console.log('Available cookies:', Object.keys(cookies));
+
     token = cookies['better-auth.session_token'];
   }
 
   if (!token) {
+    console.log('Auth failed: No token found in headers or cookies');
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
   try {
+    // Better Auth sends signed tokens in format: token.signature
+    // We need to extract just the token part (before the dot)
+    let cleanToken = token.trim();
+    if (cleanToken.includes('.')) {
+      // eslint-disable-next-line prefer-destructuring
+      cleanToken = cleanToken.split('.')[0];
+    }
+
+    console.log(
+      `Auth check: Token extracted: ${cleanToken.substring(0, 10)}... (length: ${cleanToken.length})`
+    );
+
+    // Find session by token
     const session = await prisma.session.findUnique({
-      where: { token },
+      where: { token: cleanToken },
       include: {
         user: {
           include: { merchant: true },
@@ -51,8 +73,14 @@ const requireAuth = async (req: Request, res: Response, next: NextFunction) => {
       },
     });
 
-    if (!session || session.expiresAt < new Date()) {
+    if (!session) {
+      console.log('Auth failed: Session not found in DB');
       return res.status(401).json({ error: 'Unauthorized: Invalid session' });
+    }
+
+    if (session.expiresAt < new Date()) {
+      console.log(`Auth failed: Session expired at ${session.expiresAt}`);
+      return res.status(401).json({ error: 'Unauthorized: Session expired' });
     }
 
     // Attach user to request

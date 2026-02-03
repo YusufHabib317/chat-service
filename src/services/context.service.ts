@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { prisma } from '../lib/prisma';
 import { MerchantContext } from '../types/chat.types';
 
@@ -22,6 +23,7 @@ export class ContextService {
       const merchant = await prisma.merchant.findUnique({
         where: { id: merchantId },
         include: {
+          aiContexts: true,
           products: {
             select: {
               id: true,
@@ -41,6 +43,11 @@ export class ContextService {
         merchantId: merchant.id,
         name: merchant.name,
         description: merchant.description || undefined,
+        aiContext: merchant.aiContext || undefined,
+        aiContexts: merchant.aiContexts?.map((c) => ({
+          content: c.content,
+          tags: c.tags,
+        })),
         products: merchant.products.map((p) => ({
           ...p,
           description: p.description || undefined,
@@ -62,7 +69,7 @@ export class ContextService {
   }
 
   formatContextForAI(context: MerchantContext): string {
-    const { name, description, products } = context;
+    const { name, description, products, aiContext } = context;
 
     let prompt = `SYSTEM ROLE:
 You are a dedicated, helpful, and secure AI sales assistant for "${name}".
@@ -70,7 +77,29 @@ Your goal is to assist customers with inquiries about available products, prices
 
 CONTEXT:
 Business Description: ${description || 'Not provided'}
+`;
 
+    if (context.aiContexts && context.aiContexts.length > 0) {
+      prompt += `
+ADDITIONAL KNOWLEDGE BASE:
+The merchant has provided the following specific information. Use this to answer relevant questions:
+`;
+      context.aiContexts.forEach((ctx) => {
+        prompt += `- ${ctx.content}`;
+        if (ctx.tags && ctx.tags.length > 0) {
+          prompt += ` (Tags: ${ctx.tags.join(', ')})`;
+        }
+        prompt += '\n';
+      });
+    } else if (aiContext) {
+      prompt += `
+ADDITIONAL KNOWLEDGE BASE:
+The merchant has provided the following specific information. Use this to answer relevant questions:
+${aiContext}
+`;
+    }
+
+    prompt += `
 PRODUCT CATALOG:
 The following is the ONLY list of available products. Do not invent or hallucinate other products.
 `;

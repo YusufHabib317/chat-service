@@ -29,6 +29,11 @@ export interface MerchantContext {
   merchantId: string;
   name: string;
   description?: string;
+  aiContext?: string; // Deprecated
+  aiContexts?: Array<{
+    content: string;
+    tags: string[];
+  }>;
   products: Array<{
     id: string;
     name: string;

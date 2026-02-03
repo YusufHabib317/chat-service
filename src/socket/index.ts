@@ -31,14 +31,14 @@ type TypedServer = Server<
 export function setupSocketHandlers(io: TypedServer) {
   // Authentication Middleware
   io.use(async (socket: TypedSocket, next) => {
-    let { token } = socket.handshake.auth;
+    let token = socket.handshake.auth.token as string | undefined;
 
     // Try to get token from cookies if not in auth
     if (!token && socket.handshake.headers.cookie) {
       const cookies = socket.handshake.headers.cookie.split(';').reduce(
         (acc, cookie) => {
-          const [key, value] = cookie.trim().split('=');
-          acc[key] = value;
+          const [key, ...valueParts] = cookie.trim().split('=');
+          acc[key] = decodeURIComponent(valueParts.join('='));
           return acc;
         },
         {} as Record<string, string>
@@ -50,8 +50,16 @@ export function setupSocketHandlers(io: TypedServer) {
 
     if (token) {
       try {
+        // Better Auth sends signed tokens in format: token.signature
+        // Extract just the token part (before the dot)
+        let cleanToken = token.trim();
+        if (cleanToken.includes('.')) {
+          // eslint-disable-next-line prefer-destructuring
+          cleanToken = cleanToken.split('.')[0];
+        }
+
         const session = await prisma.session.findUnique({
-          where: { token },
+          where: { token: cleanToken },
           include: {
             user: {
               include: { merchant: true },
@@ -65,9 +73,11 @@ export function setupSocketHandlers(io: TypedServer) {
           if (session.user.merchant) {
             socket.data.userType = 'merchant';
             socket.data.merchantId = session.user.merchant.id;
+            console.log(`Merchant authenticated: ${session.user.merchant.id}`);
           }
         } else {
           // Token provided but invalid or expired
+          console.log('Socket auth failed: Invalid or expired token');
           return next(new Error('Authentication failed: Invalid or expired token'));
         }
       } catch (error) {

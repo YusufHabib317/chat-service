@@ -86,10 +86,12 @@ model Merchant {
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   name        String
-  slug        String  @unique
+  slug        String            @unique
   description String?
   logoUrl     String?
   address     String?
+  aiContext   String?           @db.Text // Deprecated in favor of aiContexts
+  aiContexts  MerchantContext[]
 
   subscriptionTier SubscriptionTier @default(FREE)
 
@@ -165,4 +167,19 @@ model ChatMessage {
   createdAt DateTime @default(now())
 
   @@index([sessionId])
+}
+
+// Merchant AI Context
+model MerchantContext {
+  id         String   @id @default(cuid())
+  merchantId String
+  merchant   Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+
+  content String   @db.Text
+  tags    String[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([merchantId])
 }
