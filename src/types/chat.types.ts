@@ -44,6 +44,7 @@ export interface ServerToClientEvents {
   'merchant:online': (data: { merchantId: string }) => void;
   'merchant:offline': (data: { merchantId: string }) => void;
   'merchant:takeover': (data: { sessionId: string }) => void;
+  'merchant:release_takeover': (data: { sessionId: string }) => void;
   'typing:start': (data: { senderType: 'customer' | 'merchant' }) => void;
   'typing:stop': (data: { senderType: 'customer' | 'merchant' }) => void;
   'session:created': (session: ChatSession) => void;
@@ -52,18 +53,20 @@ export interface ServerToClientEvents {
 }
 
 export interface ClientToServerEvents {
-  'customer:join': (data: { 
-    merchantId: string; 
-    customerName: string; 
+  'customer:join': (data: {
+    merchantId: string;
+    customerName: string;
     customerEmail?: string;
+    customerId?: string;
   }) => void;
   'merchant:join': (data: { merchantId: string }) => void;
-  'message:send': (data: { 
-    sessionId: string; 
+  'message:send': (data: {
+    sessionId: string;
     content: string;
     senderType: 'customer' | 'merchant';
   }) => void;
   'merchant:takeover': (data: { sessionId: string }) => void;
+  'merchant:release_takeover': (data: { sessionId: string }) => void;
   'typing:start': (data: { sessionId: string }) => void;
   'typing:stop': (data: { sessionId: string }) => void;
 }

@@ -2,7 +2,7 @@ import { Server, Socket } from 'socket.io';
 import { prisma } from '../lib/prisma';
 import { ServerToClientEvents, ClientToServerEvents, InterServerEvents, SocketData } from '../types/chat.types';
 import { handleCustomerJoin, handleCustomerMessage } from './handlers/customer.handler';
-import { handleMerchantJoin, handleMerchantMessage, handleMerchantTakeover } from './handlers/merchant.handler';
+import { handleMerchantJoin, handleMerchantMessage, handleMerchantTakeover, handleMerchantReleaseTakeover } from './handlers/merchant.handler';
 import { handleTyping } from './handlers/typing.handler';
 
 type TypedSocket = Socket<ClientToServerEvents, ServerToClientEvents, InterServerEvents, SocketData>;
@@ -55,13 +55,14 @@ export function setupSocketHandlers(io: TypedServer) {
     console.log('Client connected:', socket.id, socket.data.userType ? `(${socket.data.userType})` : '(guest)');
 
     // Customer handlers
-    handleCustomerJoin(socket);
+    handleCustomerJoin(socket, io);
     handleCustomerMessage(socket, io);
 
     // Merchant handlers
     handleMerchantJoin(socket, io);
     handleMerchantMessage(socket, io);
     handleMerchantTakeover(socket, io);
+    handleMerchantReleaseTakeover(socket, io);
 
     // Typing handlers
     handleTyping(socket, io);

@@ -23,7 +23,7 @@ const io = new Server<
   SocketData
 >(httpServer, {
   cors: {
-    origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
+    origin: process.env.CORS_ORIGIN || 'http://localhost:9000',
     methods: ['GET', 'POST'],
     credentials: true
   }
@@ -81,7 +81,7 @@ app.get('/api/sessions/:sessionId/messages', async (req: Request, res: Response)
 setupSocketHandlers(io);
 
 // Start server
-const PORT = process.env.PORT || 4000;
+const PORT = process.env.PORT || 9001;
 
 httpServer.listen(PORT, () => {
   console.log(`Chat server running on port ${PORT}`);

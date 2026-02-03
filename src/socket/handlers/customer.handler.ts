@@ -5,15 +5,29 @@ import { ServerToClientEvents, ClientToServerEvents, SocketData } from '../../ty
 
 type TypedSocket = Socket<ClientToServerEvents, ServerToClientEvents, {}, SocketData>;
 
-export function handleCustomerJoin(socket: TypedSocket) {
-  socket.on('customer:join', async ({ merchantId, customerName, customerEmail }) => {
+export function handleCustomerJoin(socket: TypedSocket, io: any) {
+  socket.on('customer:join', async ({ merchantId, customerName, customerEmail, customerId }) => {
     try {
-      // Create new chat session
-      const session = await chatService.createSession(
-        merchantId,
-        customerName,
-        customerEmail
-      );
+      let session;
+
+      if (customerId) {
+        // Find or create session for returning customer
+        session = await chatService.findOrCreateSession(
+          merchantId,
+          customerId,
+          customerName,
+          customerEmail
+        );
+        console.log(`Customer ${customerName} (${customerId}) resumed/joined session ${session.id}`);
+      } else {
+        // Create new session for first-time customer
+        session = await chatService.createSession(
+          merchantId,
+          customerName,
+          customerEmail
+        );
+        console.log(`New customer ${customerName} joined session ${session.id}`);
+      }
 
       // Store session data in socket
       socket.data.userType = 'customer';
@@ -24,14 +38,23 @@ export function handleCustomerJoin(socket: TypedSocket) {
       socket.join(`session:${session.id}`);
       socket.join(`merchant:${merchantId}`);
 
+      // Make merchant join the session room
+      io.in(`merchant:${merchantId}`).socketsJoin(`session:${session.id}`);
+
       // Send session created event
       socket.emit('session:created', session);
+
+      // Check if merchant is online
+      const sockets = await io.in(`merchant:${merchantId}`).fetchSockets();
+      const isMerchantOnline = sockets.some((s: any) => s.data.userType === 'merchant');
+
+      if (isMerchantOnline) {
+        socket.emit('merchant:online', { merchantId });
+      }
 
       // Get previous messages (if any)
       const messages = await chatService.getSessionMessages(session.id);
       socket.emit('session:history', messages);
-
-      console.log(`Customer ${customerName} joined session ${session.id} for merchant ${merchantId}`);
     } catch (error) {
       console.error('Error in customer:join:', error);
       socket.emit('error', { message: 'Failed to join chat' });
@@ -72,8 +95,7 @@ export function handleCustomerMessage(socket: TypedSocket, io: any) {
         // Generate AI response
         const aiResponse = await aiService.generateResponse(
           session.merchantId,
-          history,
-          content
+          history
         );
 
         // Emit typing stop

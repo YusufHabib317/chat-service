@@ -9,8 +9,7 @@ const AI_ENABLED = process.env.AI_ENABLED === 'true';
 export class AIService {
   async generateResponse(
     merchantId: string,
-    conversationHistory: ChatMessage[],
-    newMessage: string
+    conversationHistory: ChatMessage[]
   ): Promise<string | null> {
     if (!AI_ENABLED || !AI_API_KEY) {
       return null;
@@ -33,8 +32,7 @@ export class AIService {
         ...conversationHistory.slice(-10).map(msg => ({
           role: msg.senderType === 'customer' ? 'user' : 'assistant',
           content: msg.content
-        })),
-        { role: 'user', content: newMessage }
+        }))
       ];
 
       // Call OpenRouter API

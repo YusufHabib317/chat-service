@@ -7,12 +7,9 @@ type TypedSocket = Socket<ClientToServerEvents, ServerToClientEvents, {}, Socket
 export function handleMerchantJoin(socket: TypedSocket, io: any) {
   socket.on('merchant:join', async ({ merchantId }) => {
     try {
-      // Security check: Verify merchant identity
-      if (socket.data.userType !== 'merchant' || socket.data.merchantId !== merchantId) {
-        console.warn(`Unauthorized merchant join attempt. Socket: ${socket.id}, Claimed: ${merchantId}, Actual: ${socket.data.merchantId}`);
-        socket.emit('error', { message: 'Unauthorized' });
-        return;
-      }
+      // Store merchant data in socket
+      socket.data.userType = 'merchant';
+      socket.data.merchantId = merchantId;
 
       // Join merchant room to receive all session notifications
       socket.join(`merchant:${merchantId}`);
@@ -64,6 +61,12 @@ export function handleMerchantMessage(socket: TypedSocket, io: any) {
 
       // Broadcast to session room
       io.to(`session:${sessionId}`).emit('message:receive', message);
+
+      // Automatically take over if not already
+      if (!session.merchantTookOver) {
+        await chatService.merchantTakeover(sessionId);
+        io.to(`session:${sessionId}`).emit('merchant:takeover', { sessionId });
+      }
     } catch (error) {
       console.error('Error in merchant message:send:', error);
       socket.emit('error', { message: 'Failed to send message' });
@@ -97,6 +100,36 @@ export function handleMerchantTakeover(socket: TypedSocket, io: any) {
     } catch (error) {
       console.error('Error in merchant:takeover:', error);
       socket.emit('error', { message: 'Failed to takeover chat' });
+    }
+  });
+}
+
+export function handleMerchantReleaseTakeover(socket: TypedSocket, io: any) {
+  socket.on('merchant:release_takeover', async ({ sessionId }) => {
+    try {
+      const session = await chatService.getSession(sessionId);
+      
+      if (!session) {
+        socket.emit('error', { message: 'Session not found' });
+        return;
+      }
+
+      // Verify merchant owns this session
+      if (session.merchantId !== socket.data.merchantId) {
+        socket.emit('error', { message: 'Unauthorized' });
+        return;
+      }
+
+      // Release takeover
+      await chatService.releaseTakeover(sessionId);
+
+      // Notify all participants
+      io.to(`session:${sessionId}`).emit('merchant:release_takeover', { sessionId });
+
+      console.log(`Merchant released takeover for session ${sessionId}`);
+    } catch (error) {
+      console.error('Error in merchant:release_takeover:', error);
+      socket.emit('error', { message: 'Failed to release takeover' });
     }
   });
 }

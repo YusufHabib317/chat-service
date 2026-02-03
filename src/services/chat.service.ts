@@ -86,6 +86,49 @@ export class ChatService {
     });
   }
 
+  async releaseTakeover(sessionId: string): Promise<void> {
+    await prisma.chatSession.update({
+      where: { id: sessionId },
+      data: {
+        merchantTookOver: false,
+        aiEnabled: true
+      }
+    });
+  }
+
+  async findOrCreateSession(
+    merchantId: string,
+    customerId: string,
+    customerName: string,
+    customerEmail?: string
+  ): Promise<ChatSession> {
+    // Try to find an active session for this customer and merchant
+    const existingSession = await prisma.chatSession.findFirst({
+      where: {
+        merchantId,
+        customerId,
+        status: 'active'
+      },
+      orderBy: { updatedAt: 'desc' }
+    });
+
+    if (existingSession) {
+      // Update customer info in case it changed
+      const updated = await prisma.chatSession.update({
+        where: { id: existingSession.id },
+        data: {
+          customerName,
+          customerEmail,
+          updatedAt: new Date()
+        }
+      });
+      return updated as ChatSession;
+    }
+
+    // Create new session if none exists
+    return await this.createSession(merchantId, customerName, customerEmail, customerId);
+  }
+
   async closeSession(sessionId: string): Promise<void> {
     await prisma.chatSession.update({
       where: { id: sessionId },
