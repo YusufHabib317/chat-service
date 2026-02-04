@@ -28,7 +28,20 @@ type TypedServer = Server<
   SocketData
 >;
 
+// Connection tracking
+let activeConnections = 0;
+const MAX_CONNECTIONS = parseInt(process.env.MAX_CONNECTIONS || '10000', 10);
+
 export function setupSocketHandlers(io: TypedServer) {
+  // Connection limit middleware
+  io.use((socket: TypedSocket, next) => {
+    if (activeConnections >= MAX_CONNECTIONS) {
+      const error = new Error('Server at maximum capacity. Please try again later.');
+      return next(error);
+    }
+    next();
+  });
+
   // Authentication Middleware
   io.use(async (socket: TypedSocket, next) => {
     let token = socket.handshake.auth.token as string | undefined;
@@ -90,10 +103,14 @@ export function setupSocketHandlers(io: TypedServer) {
   });
 
   io.on('connection', (socket: TypedSocket) => {
+    // Increment connection counter
+    activeConnections += 1;
+
     console.log(
       'Client connected:',
       socket.id,
-      socket.data.userType ? `(${socket.data.userType})` : '(guest)'
+      socket.data.userType ? `(${socket.data.userType})` : '(guest)',
+      `[${activeConnections}/${MAX_CONNECTIONS} connections]`
     );
 
     // Customer handlers
@@ -111,6 +128,9 @@ export function setupSocketHandlers(io: TypedServer) {
 
     // Disconnect handler
     socket.on('disconnect', () => {
+      // Decrement connection counter
+      activeConnections -= 1;
+
       const { userType, merchantId } = socket.data;
 
       if (userType === 'merchant' && merchantId) {
@@ -118,7 +138,17 @@ export function setupSocketHandlers(io: TypedServer) {
         io.to(`merchant:${merchantId}`).emit('merchant:offline', { merchantId });
       }
 
-      console.log('Client disconnected:', socket.id);
+      console.log(
+        'Client disconnected:',
+        socket.id,
+        `[${activeConnections}/${MAX_CONNECTIONS} connections]`
+      );
     });
   });
+
+  // Export connection stats for monitoring
+  return {
+    getActiveConnections: () => activeConnections,
+    getMaxConnections: () => MAX_CONNECTIONS,
+  };
 }

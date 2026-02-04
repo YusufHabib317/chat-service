@@ -1,9 +1,20 @@
 import { chatService } from '../../services/chat.service';
 import { TypedSocket, TypedServer } from '../../types/chat.types';
+import { sanitizeMessage, validateMessage } from '../../lib/sanitize';
+import { messageRateLimiter, joinRateLimiter } from '../../lib/rate-limiter';
 
 export function handleMerchantJoin(socket: TypedSocket, io: TypedServer) {
   socket.on('merchant:join', async () => {
     try {
+      // Rate limiting check
+      if (joinRateLimiter.isRateLimited(socket.id)) {
+        const resetTime = Math.ceil(joinRateLimiter.getResetTime(socket.id) / 1000);
+        socket.emit('error', {
+          message: `Too many join attempts. Please try again in ${resetTime} seconds.`,
+        });
+        return;
+      }
+
       // Strict Auth Check
       if (socket.data.userType !== 'merchant' || !socket.data.merchantId) {
         socket.emit('error', { message: 'Unauthorized: Invalid merchant credentials' });
@@ -35,6 +46,25 @@ export function handleMerchantMessage(socket: TypedSocket, io: TypedServer) {
     if (senderType !== 'merchant') return;
 
     try {
+      // Rate limiting check
+      if (messageRateLimiter.isRateLimited(socket.id)) {
+        const resetTime = Math.ceil(messageRateLimiter.getResetTime(socket.id) / 1000);
+        socket.emit('error', {
+          message: `Too many messages. Please wait ${resetTime} seconds before sending more.`,
+        });
+        return;
+      }
+
+      // Validate message content
+      const validation = validateMessage(content);
+      if (!validation.valid) {
+        socket.emit('error', { message: validation.error || 'Invalid message' });
+        return;
+      }
+
+      // Sanitize message content to prevent XSS
+      const sanitizedContent = sanitizeMessage(content);
+
       const session = await chatService.getSession(sessionId);
 
       if (!session) {
@@ -49,7 +79,7 @@ export function handleMerchantMessage(socket: TypedSocket, io: TypedServer) {
 
       const message = await chatService.saveMessage(
         sessionId,
-        content,
+        sanitizedContent,
         'merchant',
         socket.data.merchantId
       );

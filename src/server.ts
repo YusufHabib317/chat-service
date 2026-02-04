@@ -2,6 +2,7 @@ import express, { Request, Response, NextFunction } from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
+import helmet from 'helmet';
 import dotenv from 'dotenv';
 import {
   ServerToClientEvents,
@@ -39,14 +40,10 @@ const requireAuth = async (req: Request, res: Response, next: NextFunction) => {
       {} as Record<string, string>
     );
 
-    // Debug: Log all cookie keys
-    console.log('Available cookies:', Object.keys(cookies));
-
     token = cookies['better-auth.session_token'];
   }
 
   if (!token) {
-    console.log('Auth failed: No token found in headers or cookies');
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
@@ -59,10 +56,6 @@ const requireAuth = async (req: Request, res: Response, next: NextFunction) => {
       cleanToken = cleanToken.split('.')[0];
     }
 
-    console.log(
-      `Auth check: Token extracted: ${cleanToken.substring(0, 10)}... (length: ${cleanToken.length})`
-    );
-
     // Find session by token
     const session = await prisma.session.findUnique({
       where: { token: cleanToken },
@@ -74,12 +67,10 @@ const requireAuth = async (req: Request, res: Response, next: NextFunction) => {
     });
 
     if (!session) {
-      console.log('Auth failed: Session not found in DB');
       return res.status(401).json({ error: 'Unauthorized: Invalid session' });
     }
 
     if (session.expiresAt < new Date()) {
-      console.log(`Auth failed: Session expired at ${session.expiresAt}`);
       return res.status(401).json({ error: 'Unauthorized: Session expired' });
     }
 
@@ -92,6 +83,8 @@ const requireAuth = async (req: Request, res: Response, next: NextFunction) => {
   }
 };
 const httpServer = createServer(app);
+
+// Configure Socket.IO with connection limits and performance settings
 const io = new Server<ClientToServerEvents, ServerToClientEvents, InterServerEvents, SocketData>(
   httpServer,
   {
@@ -100,10 +93,23 @@ const io = new Server<ClientToServerEvents, ServerToClientEvents, InterServerEve
       methods: ['GET', 'POST'],
       credentials: true,
     },
+    // Connection limits and performance settings
+    maxHttpBufferSize: 1e6, // 1MB max message size
+    pingTimeout: 60000, // 60 seconds
+    pingInterval: 25000, // 25 seconds
+    connectTimeout: 45000, // 45 seconds
+    // Allow max 10,000 concurrent connections (adjust based on server capacity)
+    connectionStateRecovery: {
+      maxDisconnectionDuration: 2 * 60 * 1000, // 2 minutes
+      skipMiddlewares: true,
+    },
   }
 );
 
 // Middleware
+// Security headers
+app.use(helmet());
+
 app.use(
   cors({
     origin: process.env.CORS_ORIGIN || 'http://localhost:9000',
@@ -187,4 +193,45 @@ httpServer.listen(PORT, () => {
   console.log(`Chat server running on port ${PORT}`);
   console.log(`CORS enabled for: ${process.env.CORS_ORIGIN || 'http://localhost:9000'}`);
   console.log(`AI enabled: ${process.env.AI_ENABLED === 'true'}`);
+});
+
+// Graceful shutdown handler
+const gracefulShutdown = async (signal: string) => {
+  console.log(`\n${signal} received. Starting graceful shutdown...`);
+
+  // Stop accepting new connections
+  httpServer.close(() => {
+    console.log('HTTP server closed');
+  });
+
+  // Close all Socket.IO connections
+  io.close(() => {
+    console.log('Socket.IO server closed');
+  });
+
+  // Disconnect from database
+  try {
+    await prisma.$disconnect();
+    console.log('Database connection closed');
+  } catch (error) {
+    console.error('Error disconnecting from database:', error);
+  }
+
+  console.log('Graceful shutdown complete');
+  process.exit(0);
+};
+
+// Handle shutdown signals
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+
+// Handle uncaught errors
+process.on('uncaughtException', (error) => {
+  console.error('Uncaught Exception:', error);
+  gracefulShutdown('UNCAUGHT_EXCEPTION');
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+  gracefulShutdown('UNHANDLED_REJECTION');
 });

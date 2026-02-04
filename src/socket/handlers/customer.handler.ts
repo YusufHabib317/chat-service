@@ -1,12 +1,35 @@
 import { chatService } from '../../services/chat.service';
 import { aiService } from '../../services/ai.service';
 import { TypedSocket, TypedServer } from '../../types/chat.types';
+import { sanitizeMessage, validateMessage } from '../../lib/sanitize';
+import { messageRateLimiter, joinRateLimiter } from '../../lib/rate-limiter';
+import { prisma } from '../../lib/prisma';
 
 export function handleCustomerJoin(socket: TypedSocket, io: TypedServer) {
   socket.on(
     'customer:join',
     async ({ merchantId, customerName, customerEmail, customerId, customerToken }) => {
       try {
+        // Rate limiting check
+        if (joinRateLimiter.isRateLimited(socket.id)) {
+          const resetTime = Math.ceil(joinRateLimiter.getResetTime(socket.id) / 1000);
+          socket.emit('error', {
+            message: `Too many join attempts. Please try again in ${resetTime} seconds.`,
+          });
+          return;
+        }
+
+        // Validate that merchant exists
+        const merchant = await prisma.merchant.findUnique({
+          where: { id: merchantId },
+          select: { id: true },
+        });
+
+        if (!merchant) {
+          socket.emit('error', { message: 'Merchant not found' });
+          return;
+        }
+
         let session;
 
         if (customerId) {
@@ -66,6 +89,25 @@ export function handleCustomerMessage(socket: TypedSocket, io: TypedServer) {
     if (senderType !== 'customer') return;
 
     try {
+      // Rate limiting check
+      if (messageRateLimiter.isRateLimited(socket.id)) {
+        const resetTime = Math.ceil(messageRateLimiter.getResetTime(socket.id) / 1000);
+        socket.emit('error', {
+          message: `Too many messages. Please wait ${resetTime} seconds before sending more.`,
+        });
+        return;
+      }
+
+      // Validate message content
+      const validation = validateMessage(content);
+      if (!validation.valid) {
+        socket.emit('error', { message: validation.error || 'Invalid message' });
+        return;
+      }
+
+      // Sanitize message content to prevent XSS
+      const sanitizedContent = sanitizeMessage(content);
+
       const session = await chatService.getSession(sessionId);
 
       if (!session) {
@@ -73,8 +115,8 @@ export function handleCustomerMessage(socket: TypedSocket, io: TypedServer) {
         return;
       }
 
-      // Save customer message
-      const message = await chatService.saveMessage(sessionId, content, 'customer');
+      // Save customer message with sanitized content
+      const message = await chatService.saveMessage(sessionId, sanitizedContent, 'customer');
 
       // Broadcast to session room
       io.to(`session:${sessionId}`).emit('message:receive', message);
