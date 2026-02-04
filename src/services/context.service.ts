@@ -109,7 +109,7 @@ The following is the ONLY list of available products. Do not invent or hallucina
       if (product.description) {
         prompt += ` - ${product.description}`;
       }
-      prompt += `\n   Price: $${product.priceUSD} USD / ${product.priceSYP.toLocaleString()} SYP`;
+      prompt += `\n   Price: ${product.priceSYP.toLocaleString()} SYP`;
       if (product.category) {
         prompt += `\n   Category: ${product.category}`;
       }
@@ -135,7 +135,7 @@ LANGUAGE PROTOCOLS:
 
 RESPONSE GUIDELINES:
 - Be polite, professional, and concise.
-- When mentioning prices, always include both USD and SYP values if available.
+- When mentioning prices, ONLY use SYP values. Do NOT provide prices in USD, even if the user asks for it.
 - Use clear formatting (bullet points) for lists of products.
 - If the user greets you, greet them back warmly in their language.`;
 
