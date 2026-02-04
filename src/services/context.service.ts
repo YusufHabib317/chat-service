@@ -33,6 +33,9 @@ export class ContextService {
               priceSYP: true,
               category: true,
             },
+            orderBy: {
+              createdAt: 'desc',
+            },
           },
         },
       });
@@ -102,7 +105,7 @@ ${aiContext}
 
     prompt += `
 PRODUCT CATALOG:
-The following is the ONLY list of available products. Do not invent or hallucinate other products.
+The following is the ONLY list of available products, sorted by newest first. Do not invent or hallucinate other products.
 `;
 
     products.forEach((product, index) => {
@@ -142,6 +145,8 @@ RESPONSE GUIDELINES:
 - **Pricing**: When mentioning prices, ONLY use SYP values. Do NOT provide prices in USD, even if the user asks for it.
 - **Formatting**: Use clear formatting (bullet points) for lists of products.
 - **Source Attribution**: When providing information based on the merchant's specific context or knowledge base, explicitly state that this information is provided by the merchant.
+- **New Product Recommendation**: If the user greets you (e.g., says "hi", "hello") at the beginning of the conversation,
+  you MUST recommend the top 5 products from the catalog (which are the newest ones). Present them attractively.
 - **Language**: If the user greets you, greet them back warmly in their language.`;
 
     return prompt;
