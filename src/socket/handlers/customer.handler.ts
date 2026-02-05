@@ -22,11 +22,16 @@ export function handleCustomerJoin(socket: TypedSocket, io: TypedServer) {
         // Validate that merchant exists
         const merchant = await prisma.merchant.findUnique({
           where: { id: merchantId },
-          select: { id: true },
+          select: { id: true, isChatEnabled: true },
         });
 
         if (!merchant) {
           socket.emit('error', { message: 'Merchant not found' });
+          return;
+        }
+
+        if (merchant.isChatEnabled === false) {
+          socket.emit('error', { message: 'Chat is currently disabled for this store' });
           return;
         }
 
@@ -115,7 +120,18 @@ export function handleCustomerMessage(socket: TypedSocket, io: TypedServer) {
         return;
       }
 
-      // Save customer message with sanitized content
+      // Check if chat is still enabled for this merchant
+      const merchant = await prisma.merchant.findUnique({
+        where: { id: session.merchantId },
+        select: { isChatEnabled: true },
+      });
+
+      if (merchant && merchant.isChatEnabled === false) {
+        socket.emit('error', { message: 'Chat is currently disabled for this store' });
+        return;
+      }
+
+      // Save message to database
       const message = await chatService.saveMessage(sessionId, sanitizedContent, 'customer');
 
       // Broadcast to session room

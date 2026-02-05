@@ -85,13 +85,14 @@ model Merchant {
   userId String @unique
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  name        String
-  slug        String            @unique
-  description String?
-  logoUrl     String?
-  address     String?
-  aiContext   String?           @db.Text // Deprecated in favor of aiContexts
-  aiContexts  MerchantContext[]
+  name          String
+  slug          String            @unique
+  description   String?
+  logoUrl       String?
+  address       String?
+  aiContext     String?           @db.Text // Deprecated in favor of aiContexts
+  aiContexts    MerchantContext[]
+  isChatEnabled Boolean           @default(true)
 
   subscriptionTier SubscriptionTier @default(FREE)
 
