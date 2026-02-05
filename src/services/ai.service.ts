@@ -6,13 +6,20 @@ const { AI_API_KEY } = process.env;
 const AI_MODEL = process.env.AI_MODEL || 'gpt-4';
 const AI_ENABLED = process.env.AI_ENABLED === 'true';
 
+// Fallback messages when AI fails to respond
+const FALLBACK_MESSAGES = {
+  ar: 'عذراً، حدث خطأ في معالجة طلبك. يرجى المحاولة مرة أخرى أو انتظار أحد ممثلي خدمة العملاء.',
+  en: "I'm sorry, I encountered an error processing your request. Please try again or wait for a customer service representative.",
+};
+
 export class AIService {
-  async generateResponse(
-    merchantId: string,
-    conversationHistory: ChatMessage[]
-  ): Promise<string | null> {
+  private getFallbackMessage(): string {
+    return FALLBACK_MESSAGES.ar;
+  }
+
+  async generateResponse(merchantId: string, conversationHistory: ChatMessage[]): Promise<string> {
     if (!AI_ENABLED || !AI_API_KEY) {
-      return null;
+      return this.getFallbackMessage();
     }
 
     try {
@@ -54,10 +61,17 @@ export class AIService {
         }
       );
 
-      return response.data.choices[0]?.message?.content || null;
+      const aiContent = response.data.choices[0]?.message?.content;
+
+      if (!aiContent || aiContent.trim() === '') {
+        console.warn('AI returned empty response, using fallback message');
+        return this.getFallbackMessage();
+      }
+
+      return aiContent;
     } catch (error) {
       console.error('Error generating AI response:', error);
-      return null;
+      return this.getFallbackMessage();
     }
   }
 

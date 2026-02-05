@@ -144,25 +144,17 @@ export function handleCustomerMessage(socket: TypedSocket, io: TypedServer) {
         chatService.lockAI(sessionId);
 
         try {
-          // Emit typing start (simulate merchant typing)
           io.to(`session:${sessionId}`).emit('typing:start', { senderType: 'merchant' });
 
-          // Get conversation history
           const history = await chatService.getSessionMessages(sessionId);
 
-          // Generate AI response
           const aiResponse = await aiService.generateResponse(session.merchantId, history);
 
-          // Emit typing stop
           io.to(`session:${sessionId}`).emit('typing:stop', { senderType: 'merchant' });
 
-          if (aiResponse) {
-            // Save AI message
-            const aiMessage = await chatService.saveMessage(sessionId, aiResponse, 'ai');
+          const aiMessage = await chatService.saveMessage(sessionId, aiResponse, 'ai');
 
-            // Broadcast AI response
-            io.to(`session:${sessionId}`).emit('ai:response', aiMessage);
-          }
+          io.to(`session:${sessionId}`).emit('ai:response', aiMessage);
         } finally {
           chatService.unlockAI(sessionId);
         }
