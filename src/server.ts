@@ -31,7 +31,7 @@ const requireAuth = async (req: Request, res: Response, next: NextFunction) => {
 
   if (!token && req.headers.cookie) {
     const cookies = req.headers.cookie.split(';').reduce(
-      (acc, cookie) => {
+      (acc: Record<string, string>, cookie: string) => {
         const parts = cookie.trim().split('=');
         const key = parts[0];
         const value = parts.slice(1).join('=');

@@ -50,7 +50,7 @@ export function setupSocketHandlers(io: TypedServer) {
     // Try to get token from cookies if not in auth
     if (!token && socket.handshake.headers.cookie) {
       const cookies = socket.handshake.headers.cookie.split(';').reduce(
-        (acc, cookie) => {
+        (acc: Record<string, string>, cookie: string) => {
           const [key, ...valueParts] = cookie.trim().split('=');
           acc[key] = decodeURIComponent(valueParts.join('='));
           return acc;
