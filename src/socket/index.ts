@@ -14,6 +14,7 @@ import {
   handleMerchantReleaseTakeover,
 } from './handlers/merchant.handler';
 import { handleTyping } from './handlers/typing.handler';
+import logger from '../lib/logger';
 
 type TypedSocket = Socket<
   ClientToServerEvents,
@@ -86,15 +87,17 @@ export function setupSocketHandlers(io: TypedServer) {
           if (session.user.merchant) {
             socket.data.userType = 'merchant';
             socket.data.merchantId = session.user.merchant.id;
-            console.log(`Merchant authenticated: ${session.user.merchant.id}`);
+            logger.socket('info', 'Merchant authenticated', socket.id, {
+              merchantId: session.user.merchant.id,
+            });
           }
         } else {
           // Token provided but invalid or expired
-          console.log('Socket auth failed: Invalid or expired token');
+          logger.socket('warn', 'Socket auth failed: Invalid or expired token', socket.id);
           return next(new Error('Authentication failed: Invalid or expired token'));
         }
       } catch (error) {
-        console.error('Authentication error:', error);
+        logger.error('Authentication error', error, { socketId: socket.id });
         return next(new Error('Authentication failed: Internal error'));
       }
     }
@@ -106,12 +109,11 @@ export function setupSocketHandlers(io: TypedServer) {
     // Increment connection counter
     activeConnections += 1;
 
-    console.log(
-      'Client connected:',
-      socket.id,
-      socket.data.userType ? `(${socket.data.userType})` : '(guest)',
-      `[${activeConnections}/${MAX_CONNECTIONS} connections]`
-    );
+    logger.socket('info', 'Client connected', socket.id, {
+      userType: socket.data.userType || 'guest',
+      activeConnections,
+      maxConnections: MAX_CONNECTIONS,
+    });
 
     // Customer handlers
     handleCustomerJoin(socket, io);
@@ -138,11 +140,10 @@ export function setupSocketHandlers(io: TypedServer) {
         io.to(`merchant:${merchantId}`).emit('merchant:offline', { merchantId });
       }
 
-      console.log(
-        'Client disconnected:',
-        socket.id,
-        `[${activeConnections}/${MAX_CONNECTIONS} connections]`
-      );
+      logger.socket('info', 'Client disconnected', socket.id, {
+        activeConnections,
+        maxConnections: MAX_CONNECTIONS,
+      });
     });
   });
 

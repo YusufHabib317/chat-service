@@ -15,6 +15,8 @@ export class SocketRateLimiter {
 
   private readonly windowMs: number;
 
+  private cleanupIntervalId: NodeJS.Timeout | null = null;
+
   /**
    * Create a new rate limiter
    * @param maxRequests - Maximum number of requests allowed in the time window
@@ -25,7 +27,11 @@ export class SocketRateLimiter {
     this.windowMs = windowMs;
 
     // Clean up expired entries every minute
-    setInterval(() => this.cleanup(), 60000);
+    this.cleanupIntervalId = setInterval(() => this.cleanup(), 60000);
+    // Prevent the interval from keeping the process alive during shutdown
+    if (this.cleanupIntervalId.unref) {
+      this.cleanupIntervalId.unref();
+    }
   }
 
   /**
@@ -105,8 +111,28 @@ export class SocketRateLimiter {
   clear(): void {
     this.limits.clear();
   }
+
+  /**
+   * Destroy the rate limiter and clean up resources
+   * Call this during graceful shutdown to prevent memory leaks
+   */
+  destroy(): void {
+    if (this.cleanupIntervalId) {
+      clearInterval(this.cleanupIntervalId);
+      this.cleanupIntervalId = null;
+    }
+    this.limits.clear();
+  }
 }
 
 // Create rate limiters for different event types
 export const messageRateLimiter = new SocketRateLimiter(10, 60000); // 10 messages per minute
 export const joinRateLimiter = new SocketRateLimiter(5, 60000); // 5 joins per minute
+
+/**
+ * Cleanup function to be called during graceful shutdown
+ */
+export function destroyRateLimiters(): void {
+  messageRateLimiter.destroy();
+  joinRateLimiter.destroy();
+}

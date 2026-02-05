@@ -4,6 +4,7 @@ import { TypedSocket, TypedServer } from '../../types/chat.types';
 import { sanitizeMessage, validateMessage } from '../../lib/sanitize';
 import { messageRateLimiter, joinRateLimiter } from '../../lib/rate-limiter';
 import { prisma } from '../../lib/prisma';
+import logger from '../../lib/logger';
 
 export function handleCustomerJoin(socket: TypedSocket, io: TypedServer) {
   socket.on(
@@ -46,13 +47,18 @@ export function handleCustomerJoin(socket: TypedSocket, io: TypedServer) {
             customerEmail,
             customerToken
           );
-          console.log(
-            `Customer ${customerName} (${customerId}) resumed/joined session ${session.id}`
-          );
+          logger.session('info', 'Customer resumed session', session.id, {
+            customerId,
+            customerName,
+            merchantId,
+          });
         } else {
           // Create new session for first-time customer
           session = await chatService.createSession(merchantId, customerName, customerEmail);
-          console.log(`New customer ${customerName} joined session ${session.id}`);
+          logger.session('info', 'New customer joined session', session.id, {
+            customerName,
+            merchantId,
+          });
         }
 
         // Store session data in socket
@@ -82,7 +88,7 @@ export function handleCustomerJoin(socket: TypedSocket, io: TypedServer) {
         const messages = await chatService.getSessionMessages(session.id);
         socket.emit('session:history', messages);
       } catch (error) {
-        console.error('Error in customer:join:', error);
+        logger.error('Error in customer:join', error, { socketId: socket.id });
         socket.emit('error', { message: 'Failed to join chat' });
       }
     }
@@ -160,7 +166,7 @@ export function handleCustomerMessage(socket: TypedSocket, io: TypedServer) {
         }
       }
     } catch (error) {
-      console.error('Error in message:send:', error);
+      logger.error('Error in message:send', error, { socketId: socket.id });
       socket.emit('error', { message: 'Failed to send message' });
     }
   });

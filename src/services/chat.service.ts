@@ -1,6 +1,7 @@
 import { randomUUID } from 'crypto';
 import { prisma } from '../lib/prisma';
 import { ChatSession, ChatMessage } from '../types/chat.types';
+import logger from '../lib/logger';
 
 export class ChatService {
   private aiLocks = new Set<string>();
@@ -182,7 +183,7 @@ export class ChatService {
       await prisma.$queryRaw`SELECT 1`;
       return true;
     } catch (error) {
-      console.error('Health check failed:', error);
+      logger.error('Health check failed', error);
       return false;
     }
   }

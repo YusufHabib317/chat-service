@@ -13,6 +13,8 @@ import {
 import { setupSocketHandlers } from './socket';
 import { chatService } from './services/chat.service';
 import { prisma } from './lib/prisma';
+import logger from './lib/logger';
+import { destroyRateLimiters } from './lib/rate-limiter';
 
 dotenv.config();
 
@@ -78,7 +80,7 @@ const requireAuth = async (req: Request, res: Response, next: NextFunction) => {
     (req as AuthenticatedRequest).user = session.user;
     next();
   } catch (error) {
-    console.error('Auth middleware error:', error);
+    logger.error('Auth middleware error', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 };
@@ -152,7 +154,7 @@ app.get('/api/merchants/:merchantId/sessions', requireAuth, async (req: Request,
     const sessions = await chatService.getMerchantSessions(merchantId, limit, offset);
     res.json(sessions);
   } catch (error) {
-    console.error('Error fetching sessions:', error);
+    logger.error('Error fetching sessions', error);
     res.status(500).json({ error: 'Failed to fetch sessions' });
   }
 });
@@ -178,7 +180,7 @@ app.get('/api/sessions/:sessionId/messages', requireAuth, async (req: Request, r
     const messages = await chatService.getSessionMessages(sessionId, limit, offset);
     res.json(messages);
   } catch (error) {
-    console.error('Error fetching messages:', error);
+    logger.error('Error fetching messages', error);
     res.status(500).json({ error: 'Failed to fetch messages' });
   }
 });
@@ -190,34 +192,39 @@ setupSocketHandlers(io);
 const PORT = process.env.PORT || 9001;
 
 httpServer.listen(PORT, () => {
-  console.log(`Chat server running on port ${PORT}`);
-  console.log(`CORS enabled for: ${process.env.CORS_ORIGIN || 'http://localhost:9000'}`);
-  console.log(`AI enabled: ${process.env.AI_ENABLED === 'true'}`);
+  logger.info('Chat server started', {
+    port: PORT,
+    corsOrigin: process.env.CORS_ORIGIN || 'http://localhost:9000',
+    aiEnabled: process.env.AI_ENABLED === 'true',
+  });
 });
 
 // Graceful shutdown handler
 const gracefulShutdown = async (signal: string) => {
-  console.log(`\n${signal} received. Starting graceful shutdown...`);
+  logger.info('Starting graceful shutdown', { signal });
+
+  // Destroy rate limiters to prevent memory leaks
+  destroyRateLimiters();
 
   // Stop accepting new connections
   httpServer.close(() => {
-    console.log('HTTP server closed');
+    logger.info('HTTP server closed');
   });
 
   // Close all Socket.IO connections
   io.close(() => {
-    console.log('Socket.IO server closed');
+    logger.info('Socket.IO server closed');
   });
 
   // Disconnect from database
   try {
     await prisma.$disconnect();
-    console.log('Database connection closed');
+    logger.info('Database connection closed');
   } catch (error) {
-    console.error('Error disconnecting from database:', error);
+    logger.error('Error disconnecting from database', error);
   }
 
-  console.log('Graceful shutdown complete');
+  logger.info('Graceful shutdown complete');
   process.exit(0);
 };
 
@@ -227,11 +234,11 @@ process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
 // Handle uncaught errors
 process.on('uncaughtException', (error) => {
-  console.error('Uncaught Exception:', error);
+  logger.error('Uncaught Exception', error);
   gracefulShutdown('UNCAUGHT_EXCEPTION');
 });
 
 process.on('unhandledRejection', (reason, promise) => {
-  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+  logger.error('Unhandled Rejection', reason, { promise: String(promise) });
   gracefulShutdown('UNHANDLED_REJECTION');
 });

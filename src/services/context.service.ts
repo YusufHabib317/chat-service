@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { prisma } from '../lib/prisma';
 import { MerchantContext } from '../types/chat.types';
+import logger from '../lib/logger';
 
 interface CacheEntry {
   context: MerchantContext;
@@ -66,7 +67,7 @@ export class ContextService {
 
       return context;
     } catch (error) {
-      console.error('Error fetching merchant context:', error);
+      logger.error('Error fetching merchant context', error, { merchantId });
       return null;
     }
   }

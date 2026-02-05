@@ -2,6 +2,7 @@ import { chatService } from '../../services/chat.service';
 import { TypedSocket, TypedServer } from '../../types/chat.types';
 import { sanitizeMessage, validateMessage } from '../../lib/sanitize';
 import { messageRateLimiter, joinRateLimiter } from '../../lib/rate-limiter';
+import logger from '../../lib/logger';
 
 export function handleMerchantJoin(socket: TypedSocket, io: TypedServer) {
   socket.on('merchant:join', async () => {
@@ -33,9 +34,9 @@ export function handleMerchantJoin(socket: TypedSocket, io: TypedServer) {
 
       io.to(`merchant:${merchantId}`).emit('merchant:online', { merchantId });
 
-      console.log(`Merchant ${merchantId} joined with ${sessions.length} active sessions`);
+      logger.info('Merchant joined', { merchantId, activeSessions: sessions.length });
     } catch (error) {
-      console.error('Error in merchant:join:', error);
+      logger.error('Error in merchant:join', error, { socketId: socket.id });
       socket.emit('error', { message: 'Failed to join as merchant' });
     }
   });
@@ -92,7 +93,7 @@ export function handleMerchantMessage(socket: TypedSocket, io: TypedServer) {
         io.to(`session:${sessionId}`).emit('merchant:takeover', { sessionId });
       }
     } catch (error) {
-      console.error('Error in merchant message:send:', error);
+      logger.error('Error in merchant message:send', error, { socketId: socket.id });
       socket.emit('error', { message: 'Failed to send message' });
     }
   });
@@ -120,9 +121,11 @@ export function handleMerchantTakeover(socket: TypedSocket, io: TypedServer) {
       // Notify all participants
       io.to(`session:${sessionId}`).emit('merchant:takeover', { sessionId });
 
-      console.log(`Merchant took over session ${sessionId}`);
+      logger.session('info', 'Merchant took over session', sessionId, {
+        merchantId: socket.data.merchantId,
+      });
     } catch (error) {
-      console.error('Error in merchant:takeover:', error);
+      logger.error('Error in merchant:takeover', error, { socketId: socket.id });
       socket.emit('error', { message: 'Failed to takeover chat' });
     }
   });
@@ -150,9 +153,11 @@ export function handleMerchantReleaseTakeover(socket: TypedSocket, io: TypedServ
       // Notify all participants
       io.to(`session:${sessionId}`).emit('merchant:release_takeover', { sessionId });
 
-      console.log(`Merchant released takeover for session ${sessionId}`);
+      logger.session('info', 'Merchant released takeover', sessionId, {
+        merchantId: socket.data.merchantId,
+      });
     } catch (error) {
-      console.error('Error in merchant:release_takeover:', error);
+      logger.error('Error in merchant:release_takeover', error, { socketId: socket.id });
       socket.emit('error', { message: 'Failed to release takeover' });
     }
   });
