@@ -93,6 +93,7 @@ model Merchant {
   aiContext     String?           @db.Text // Deprecated in favor of aiContexts
   aiContexts    MerchantContext[]
   isChatEnabled Boolean           @default(true)
+  defaultExchangeRate Float             @default(15000)
 
   subscriptionTier SubscriptionTier @default(FREE)
 
@@ -111,6 +112,12 @@ enum SubscriptionTier {
   PREMIUM
 }
 
+enum ProductCondition {
+  NEW
+  USED
+  REFURBISHED
+}
+
 // Product
 model Product {
   id         String   @id @default(cuid())
@@ -122,12 +129,14 @@ model Product {
   priceUSD     Float
   priceSYP     Float
   exchangeRate Float    @default(10000) // Merchant's custom exchange rate (1 USD = X SYP)
+  originalPriceSYP Float?   // Stores original SYP price for reversion
   imageUrls    String[]
   category     String?
 
   stock       Int      @default(0)
   isPublished Boolean  @default(true)
   tags        String[]
+  condition   ProductCondition @default(NEW)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
